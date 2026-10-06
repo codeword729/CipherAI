@@ -1,5 +1,6 @@
 name: Build CipherAI APK
-
+permissions:
+  contents: write
 on:
   workflow_dispatch:
   push:
