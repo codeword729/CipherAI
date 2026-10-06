@@ -1,0 +1,790 @@
+name: Build CipherAI APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/com/codeword/cipherai
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "CipherAI"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.codeword.cipherai'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId "com.codeword.cipherai"
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName "0.1.0"
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="暗号AI"
+                  android:theme="@style/AppTheme">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".FloatingService"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="User-controlled floating assistant prototype" />
+                  </service>
+
+              </application>
+          </manifest>
+          EOF
+
+          mkdir -p app/src/main/res/values
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#58E6FF</item>
+                  <item name="android:navigationBarColor">#080B12</item>
+                  <item name="android:statusBarColor">#080B12</item>
+                  <item name="android:windowLightStatusBar">false</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/java/com/codeword/cipherai/MainActivity.java <<'EOF'
+          package com.codeword.cipherai;
+
+          import android.Manifest;
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.graphics.Color;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.provider.Settings;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.widget.Button;
+          import android.widget.LinearLayout;
+          import android.widget.ScrollView;
+          import android.widget.TextView;
+          import android.widget.Toast;
+
+          public class MainActivity extends Activity {
+
+              private LinearLayout root;
+              private SharedPreferences prefs;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  prefs = getSharedPreferences("cipher_settings", MODE_PRIVATE);
+
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      requestPermissions(
+                          new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                          100
+                      );
+                  }
+
+                  buildUi();
+              }
+
+              private TextView text(String value, int size, int color) {
+                  TextView view = new TextView(this);
+                  view.setText(value);
+                  view.setTextSize(size);
+                  view.setTextColor(color);
+                  view.setPadding(8, 12, 8, 12);
+                  return view;
+              }
+
+              private Button button(String title) {
+                  Button button = new Button(this);
+                  button.setText(title);
+                  button.setAllCaps(false);
+                  button.setTextSize(16);
+                  LinearLayout.LayoutParams params =
+                      new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      );
+                  params.setMargins(0, 8, 0, 8);
+                  button.setLayoutParams(params);
+                  return button;
+              }
+
+              private void buildUi() {
+                  ScrollView scroll = new ScrollView(this);
+                  scroll.setBackgroundColor(Color.rgb(8, 11, 18));
+
+                  root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setPadding(34, 55, 34, 55);
+                  scroll.addView(root);
+
+                  TextView title = text("暗号AI", 30, Color.WHITE);
+                  title.setGravity(Gravity.CENTER);
+                  root.addView(title);
+
+                  TextView subtitle = text(
+                      "我可以帮你操作\n第一版安全悬浮球测试",
+                      17,
+                      Color.rgb(168, 184, 210)
+                  );
+                  subtitle.setGravity(Gravity.CENTER);
+                  root.addView(subtitle);
+
+                  TextView warning = text(
+                      "当前版本不会读取游戏画面，也不会点击游戏技能。" +
+                      "这一版只测试悬浮球、大小设置、暂停和彻底关闭，" +
+                      "避免出现无法关闭的问题。",
+                      14,
+                      Color.rgb(255, 196, 105)
+                  );
+                  root.addView(warning);
+
+                  Button permission = button("① 授予悬浮窗权限");
+                  permission.setOnClickListener(v -> requestOverlay());
+                  root.addView(permission);
+
+                  Button start = button("② 启动暗号AI悬浮球");
+                  start.setOnClickListener(v -> startFloating());
+                  root.addView(start);
+
+                  root.addView(text("悬浮球大小", 18, Color.WHITE));
+
+                  LinearLayout sizes = new LinearLayout(this);
+                  sizes.setOrientation(LinearLayout.HORIZONTAL);
+
+                  Button small = new Button(this);
+                  Button medium = new Button(this);
+                  Button large = new Button(this);
+
+                  small.setText("小");
+                  medium.setText("中");
+                  large.setText("大");
+
+                  sizes.addView(
+                      small,
+                      new LinearLayout.LayoutParams(0, 120, 1)
+                  );
+                  sizes.addView(
+                      medium,
+                      new LinearLayout.LayoutParams(0, 120, 1)
+                  );
+                  sizes.addView(
+                      large,
+                      new LinearLayout.LayoutParams(0, 120, 1)
+                  );
+
+                  root.addView(sizes);
+
+                  small.setOnClickListener(v -> saveSize("small"));
+                  medium.setOnClickListener(v -> saveSize("medium"));
+                  large.setOnClickListener(v -> saveSize("large"));
+
+                  Button stop = button("■ 完全停止悬浮服务");
+                  stop.setTextColor(Color.rgb(190, 0, 30));
+                  stop.setOnClickListener(v -> {
+                      Intent intent =
+                          new Intent(this, FloatingService.class);
+                      intent.setAction(FloatingService.ACTION_STOP);
+                      startService(intent);
+                      Toast.makeText(
+                          this,
+                          "已经发送完全停止指令",
+                          Toast.LENGTH_SHORT
+                      ).show();
+                  });
+                  root.addView(stop);
+
+                  TextView safety = text(
+                      "关闭方法：\n" +
+                      "1. 悬浮球面板里的红色停止按钮；\n" +
+                      "2. 暗号AI通知栏里的立即停止；\n" +
+                      "3. 当前主界面的完全停止按钮；\n" +
+                      "4. 系统设置中强制停止应用。",
+                      14,
+                      Color.rgb(155, 170, 195)
+                  );
+                  root.addView(safety);
+
+                  setContentView(scroll);
+              }
+
+              private void requestOverlay() {
+                  if (Settings.canDrawOverlays(this)) {
+                      Toast.makeText(
+                          this,
+                          "悬浮窗权限已经开启",
+                          Toast.LENGTH_SHORT
+                      ).show();
+                      return;
+                  }
+
+                  Intent intent = new Intent(
+                      Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                      Uri.parse("package:" + getPackageName())
+                  );
+                  startActivity(intent);
+              }
+
+              private void startFloating() {
+                  if (!Settings.canDrawOverlays(this)) {
+                      Toast.makeText(
+                          this,
+                          "请先授予悬浮窗权限",
+                          Toast.LENGTH_LONG
+                      ).show();
+                      requestOverlay();
+                      return;
+                  }
+
+                  Intent intent =
+                      new Intent(this, FloatingService.class);
+
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(intent);
+                  } else {
+                      startService(intent);
+                  }
+
+                  Toast.makeText(
+                      this,
+                      "悬浮球已经启动",
+                      Toast.LENGTH_SHORT
+                  ).show();
+              }
+
+              private void saveSize(String size) {
+                  prefs.edit().putString("ball_size", size).apply();
+
+                  Intent intent =
+                      new Intent(this, FloatingService.class);
+                  intent.setAction(FloatingService.ACTION_REFRESH);
+                  startService(intent);
+
+                  String name = size.equals("small")
+                      ? "小"
+                      : size.equals("medium") ? "中" : "大";
+
+                  Toast.makeText(
+                      this,
+                      "已经设置为" + name,
+                      Toast.LENGTH_SHORT
+                  ).show();
+              }
+          }
+          EOF
+
+          cat > app/src/main/java/com/codeword/cipherai/FloatingService.java <<'EOF'
+          package com.codeword.cipherai;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.graphics.Color;
+          import android.graphics.PixelFormat;
+          import android.graphics.drawable.GradientDrawable;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.view.Gravity;
+          import android.view.MotionEvent;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.widget.Button;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+
+          public class FloatingService extends Service {
+
+              public static final String ACTION_STOP =
+                  "com.codeword.cipherai.STOP";
+
+              public static final String ACTION_REFRESH =
+                  "com.codeword.cipherai.REFRESH";
+
+              private static final String CHANNEL_ID = "cipher_ai_service";
+              private static final int NOTIFICATION_ID = 729;
+
+              private WindowManager windowManager;
+              private LinearLayout container;
+              private TextView ball;
+              private LinearLayout panel;
+              private WindowManager.LayoutParams params;
+              private SharedPreferences prefs;
+
+              private float touchX;
+              private float touchY;
+              private int startX;
+              private int startY;
+              private boolean moved;
+
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+
+                  prefs = getSharedPreferences(
+                      "cipher_settings",
+                      MODE_PRIVATE
+                  );
+
+                  createChannel();
+                  startForeground(
+                      NOTIFICATION_ID,
+                      buildNotification()
+                  );
+
+                  createFloatingView();
+              }
+
+              @Override
+              public int onStartCommand(
+                  Intent intent,
+                  int flags,
+                  int startId
+              ) {
+                  if (intent != null) {
+                      String action = intent.getAction();
+
+                      if (ACTION_STOP.equals(action)) {
+                          shutdown();
+                          return START_NOT_STICKY;
+                      }
+
+                      if (ACTION_REFRESH.equals(action)) {
+                          applyBallSize();
+                      }
+                  }
+
+                  return START_NOT_STICKY;
+              }
+
+              private void createChannel() {
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      NotificationChannel channel =
+                          new NotificationChannel(
+                              CHANNEL_ID,
+                              "暗号AI运行状态",
+                              NotificationManager.IMPORTANCE_LOW
+                          );
+
+                      channel.setDescription(
+                          "用于显示暗号AI的停止按钮"
+                      );
+
+                      NotificationManager manager =
+                          getSystemService(
+                              NotificationManager.class
+                          );
+
+                      manager.createNotificationChannel(channel);
+                  }
+              }
+
+              private Notification buildNotification() {
+                  Intent openIntent =
+                      new Intent(this, MainActivity.class);
+
+                  PendingIntent openPending =
+                      PendingIntent.getActivity(
+                          this,
+                          1,
+                          openIntent,
+                          PendingIntent.FLAG_UPDATE_CURRENT
+                              | PendingIntent.FLAG_IMMUTABLE
+                      );
+
+                  Intent stopIntent =
+                      new Intent(this, FloatingService.class);
+                  stopIntent.setAction(ACTION_STOP);
+
+                  PendingIntent stopPending =
+                      PendingIntent.getService(
+                          this,
+                          2,
+                          stopIntent,
+                          PendingIntent.FLAG_UPDATE_CURRENT
+                              | PendingIntent.FLAG_IMMUTABLE
+                      );
+
+                  Notification.Builder builder =
+                      Build.VERSION.SDK_INT >= 26
+                          ? new Notification.Builder(
+                              this,
+                              CHANNEL_ID
+                          )
+                          : new Notification.Builder(this);
+
+                  return builder
+                      .setContentTitle("暗号AI悬浮球正在运行")
+                      .setContentText("点击“立即停止”可彻底关闭")
+                      .setSmallIcon(
+                          android.R.drawable.ic_dialog_info
+                      )
+                      .setContentIntent(openPending)
+                      .setOngoing(true)
+                      .addAction(
+                          new Notification.Action.Builder(
+                              null,
+                              "立即停止",
+                              stopPending
+                          ).build()
+                      )
+                      .build();
+              }
+
+              private GradientDrawable background(
+                  int color,
+                  int radius
+              ) {
+                  GradientDrawable drawable =
+                      new GradientDrawable();
+
+                  drawable.setColor(color);
+                  drawable.setCornerRadius(radius);
+                  drawable.setStroke(
+                      2,
+                      Color.rgb(88, 230, 255)
+                  );
+
+                  return drawable;
+              }
+
+              private Button panelButton(String title) {
+                  Button button = new Button(this);
+                  button.setText(title);
+                  button.setAllCaps(false);
+
+                  LinearLayout.LayoutParams layout =
+                      new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      );
+
+                  layout.setMargins(8, 6, 8, 6);
+                  button.setLayoutParams(layout);
+                  return button;
+              }
+
+              private void createFloatingView() {
+                  windowManager =
+                      (WindowManager) getSystemService(
+                          WINDOW_SERVICE
+                      );
+
+                  container = new LinearLayout(this);
+                  container.setOrientation(
+                      LinearLayout.VERTICAL
+                  );
+                  container.setGravity(Gravity.END);
+
+                  ball = new TextView(this);
+                  ball.setText("暗号AI");
+                  ball.setTextColor(Color.WHITE);
+                  ball.setTextSize(12);
+                  ball.setGravity(Gravity.CENTER);
+                  ball.setBackground(
+                      background(
+                          Color.rgb(84, 74, 190),
+                          200
+                      )
+                  );
+
+                  container.addView(ball);
+
+                  panel = new LinearLayout(this);
+                  panel.setOrientation(
+                      LinearLayout.VERTICAL
+                  );
+                  panel.setPadding(14, 14, 14, 14);
+                  panel.setVisibility(View.GONE);
+                  panel.setBackground(
+                      background(
+                          Color.rgb(18, 25, 39),
+                          28
+                      )
+                  );
+
+                  TextView state = new TextView(this);
+                  state.setText(
+                      "持续观察：尚未接入\n" +
+                      "自动操作：尚未接入\n" +
+                      "当前为安全悬浮球测试版"
+                  );
+                  state.setTextColor(Color.WHITE);
+                  state.setTextSize(13);
+                  state.setPadding(12, 12, 12, 12);
+                  panel.addView(state);
+
+                  Button small = panelButton("小");
+                  Button medium = panelButton("中");
+                  Button large = panelButton("大");
+                  Button pause = panelButton("暂停显示");
+                  Button stop =
+                      panelButton("■ 停止并退出悬浮服务");
+
+                  stop.setTextColor(Color.rgb(190, 0, 30));
+
+                  panel.addView(small);
+                  panel.addView(medium);
+                  panel.addView(large);
+                  panel.addView(pause);
+                  panel.addView(stop);
+
+                  container.addView(panel);
+
+                  small.setOnClickListener(v -> setSize("small"));
+                  medium.setOnClickListener(v -> setSize("medium"));
+                  large.setOnClickListener(v -> setSize("large"));
+
+                  pause.setOnClickListener(v ->
+                      panel.setVisibility(View.GONE)
+                  );
+
+                  stop.setOnClickListener(v -> shutdown());
+
+                  int type = Build.VERSION.SDK_INT >= 26
+                      ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                      : WindowManager.LayoutParams.TYPE_PHONE;
+
+                  params = new WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      type,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                          | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                      PixelFormat.TRANSLUCENT
+                  );
+
+                  params.gravity =
+                      Gravity.TOP | Gravity.START;
+                  params.x = 20;
+                  params.y = 300;
+
+                  ball.setOnTouchListener(
+                      (view, event) -> handleTouch(event)
+                  );
+
+                  applyBallSize();
+                  windowManager.addView(container, params);
+              }
+
+              private boolean handleTouch(MotionEvent event) {
+                  switch (event.getAction()) {
+                      case MotionEvent.ACTION_DOWN:
+                          touchX = event.getRawX();
+                          touchY = event.getRawY();
+                          startX = params.x;
+                          startY = params.y;
+                          moved = false;
+                          return true;
+
+                      case MotionEvent.ACTION_MOVE:
+                          int dx =
+                              (int) (event.getRawX() - touchX);
+                          int dy =
+                              (int) (event.getRawY() - touchY);
+
+                          if (Math.abs(dx) + Math.abs(dy) > 8) {
+                              moved = true;
+                          }
+
+                          params.x = startX + dx;
+                          params.y = startY + dy;
+
+                          if (windowManager != null
+                              && container != null) {
+                              windowManager.updateViewLayout(
+                                  container,
+                                  params
+                              );
+                          }
+                          return true;
+
+                      case MotionEvent.ACTION_UP:
+                          if (!moved) {
+                              panel.setVisibility(
+                                  panel.getVisibility()
+                                      == View.VISIBLE
+                                      ? View.GONE
+                                      : View.VISIBLE
+                              );
+                          }
+                          return true;
+
+                      default:
+                          return false;
+                  }
+              }
+
+              private void setSize(String size) {
+                  prefs.edit()
+                      .putString("ball_size", size)
+                      .apply();
+                  applyBallSize();
+              }
+
+              private void applyBallSize() {
+                  if (ball == null) {
+                      return;
+                  }
+
+                  String size =
+                      prefs.getString(
+                          "ball_size",
+                          "small"
+                      );
+
+                  int dp;
+
+                  if ("large".equals(size)) {
+                      dp = 74;
+                  } else if ("medium".equals(size)) {
+                      dp = 60;
+                  } else {
+                      dp = 48;
+                  }
+
+                  int pixels =
+                      (int) (
+                          dp
+                          * getResources()
+                              .getDisplayMetrics()
+                              .density
+                      );
+
+                  LinearLayout.LayoutParams ballParams =
+                      new LinearLayout.LayoutParams(
+                          pixels,
+                          pixels
+                      );
+
+                  ball.setLayoutParams(ballParams);
+              }
+
+              private void shutdown() {
+                  if (windowManager != null
+                      && container != null) {
+                      try {
+                          windowManager.removeView(container);
+                      } catch (Exception ignored) {
+                      }
+                  }
+
+                  container = null;
+                  stopForeground(true);
+                  stopSelf();
+              }
+
+              @Override
+              public void onDestroy() {
+                  if (windowManager != null
+                      && container != null) {
+                      try {
+                          windowManager.removeView(container);
+                      } catch (Exception ignored) {
+                      }
+                  }
+
+                  container = null;
+                  super.onDestroy();
+              }
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
+          }
+          EOF
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CipherAI-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
