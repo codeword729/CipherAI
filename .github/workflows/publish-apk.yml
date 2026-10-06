@@ -1,0 +1,65 @@
+name: Publish Direct APK
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build CipherAI APK"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+          else
+            RUN_ID=$(gh run list \
+              --workflow build-apk.yml \
+              --status success \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId')
+          fi
+
+          echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+
+      - name: Download APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p apk
+          gh run download "$RUN_ID" \
+            --name CipherAI-debug-apk \
+            --dir apk
+
+      - name: Publish direct APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest \
+              apk/app-debug.apk \
+              --clobber
+          else
+            gh release create latest \
+              apk/app-debug.apk \
+              --title "暗号AI测试版" \
+              --notes "暗号AI安全悬浮球测试版本" \
+              --latest
+          fi
