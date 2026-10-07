@@ -32,7 +32,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APK="app/build/outputs/apk/debug/app-debug.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk CipherAI-v2.apk
+          APK="CipherAI-v2.apk"
 
           if gh release view latest >/dev/null 2>&1
           then
