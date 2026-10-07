@@ -1,0 +1,211 @@
+name: Upgrade CipherAI V2-B
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Connect capture to main screen
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "app/src/main/java/com/codeword/"
+              "cipherai/MainActivity.java"
+          )
+
+          text = path.read_text(encoding="utf-8")
+
+          if (
+              "import android.media.projection."
+              "MediaProjectionManager;"
+              not in text
+          ):
+              text = text.replace(
+                  "import android.app.Activity;",
+                  "import android.app.Activity;\n"
+                  "import android.content.Context;\n"
+                  "import android.media.projection."
+                  "MediaProjectionManager;"
+              )
+
+          text = text.replace(
+              '"我可以帮你操作\\n第一版安全悬浮球测试"',
+              '"我可以帮你操作\\nV2持续观察测试"'
+          )
+
+          text = text.replace(
+              '"当前版本不会读取游戏画面，也不会点击游戏技能。" +\n'
+              '            "这一版只测试悬浮球、大小设置、暂停和彻底关闭，" +\n'
+              '            "避免出现无法关闭的问题。",',
+              '"V2可以持续读取画面并显示采集帧率，" +\n'
+              '            "但不会保存画面，也不会自动点击游戏技能。",'
+          )
+
+          old_buttons = '''        Button start = button(
+              "② 启动暗号AI悬浮球"
+          );
+          start.setOnClickListener(v -> startFloating());
+          root.addView(start);'''
+
+          if old_buttons not in text:
+              old_buttons = '''        Button start = button("② 启动暗号AI悬浮球");
+          start.setOnClickListener(v -> startFloating());
+          root.addView(start);'''
+
+          new_buttons = '''        Button start = button(
+              "② 启动暗号AI悬浮球"
+          );
+          start.setOnClickListener(v -> startFloating());
+          root.addView(start);
+
+          Button capture = button(
+              "③ 授权并启动持续观察"
+          );
+          capture.setOnClickListener(
+              v -> requestScreenCapture()
+          );
+          root.addView(capture);'''
+
+          if "③ 授权并启动持续观察" not in text:
+              text = text.replace(
+                  old_buttons,
+                  new_buttons
+              )
+
+          old_stop = '''            startService(intent);
+              Toast.makeText('''
+
+          new_stop = '''            startService(intent);
+
+              Intent captureStop =
+                  new Intent(
+                      this,
+                      CaptureService.class
+                  );
+
+              captureStop.setAction(
+                  CaptureService.ACTION_STOP
+              );
+
+              startService(captureStop);
+
+              Toast.makeText('''
+
+          if "captureStop" not in text:
+              text = text.replace(
+                  old_stop,
+                  new_stop,
+                  1
+              )
+
+          methods = '''
+              private static final int REQUEST_CAPTURE = 729;
+
+              private void requestScreenCapture() {
+                  MediaProjectionManager manager =
+                      (MediaProjectionManager)
+                          getSystemService(
+                              Context
+                                  .MEDIA_PROJECTION_SERVICE
+                          );
+
+                  startActivityForResult(
+                      manager
+                          .createScreenCaptureIntent(),
+                      REQUEST_CAPTURE
+                  );
+              }
+
+              @Override
+              protected void onActivityResult(
+                  int requestCode,
+                  int resultCode,
+                  Intent data
+              ) {
+                  super.onActivityResult(
+                      requestCode,
+                      resultCode,
+                      data
+                  );
+
+                  if (requestCode != REQUEST_CAPTURE) {
+                      return;
+                  }
+
+                  if (
+                      resultCode != RESULT_OK
+                      || data == null
+                  ) {
+                      Toast.makeText(
+                          this,
+                          "没有获得持续观察权限",
+                          Toast.LENGTH_LONG
+                      ).show();
+                      return;
+                  }
+
+                  Intent capture =
+                      new Intent(
+                          this,
+                          CaptureService.class
+                      );
+
+                  capture.putExtra(
+                      CaptureService.EXTRA_CODE,
+                      resultCode
+                  );
+
+                  capture.putExtra(
+                      CaptureService.EXTRA_DATA,
+                      data
+                  );
+
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(capture);
+                  } else {
+                      startService(capture);
+                  }
+
+                  Toast.makeText(
+                      this,
+                      "持续观察已启动",
+                      Toast.LENGTH_SHORT
+                  ).show();
+              }
+
+          '''
+
+          marker = "    private void saveSize(String size) {"
+
+          if "REQUEST_CAPTURE = 729" not in text:
+              text = text.replace(
+                  marker,
+                  methods + marker
+              )
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Save V2-B
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add app/src/main/java/com/codeword/cipherai/MainActivity.java
+
+          git commit \
+            -m "Connect V2 capture to main screen" \
+            || exit 0
+
+          git push
