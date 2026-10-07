@@ -2,6 +2,8 @@ package com.codeword.cipherai;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
+import android.media.projection.MediaProjectionManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -76,7 +78,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-            "我可以帮你操作\n第一版安全悬浮球测试",
+            "我可以帮你操作\nV2持续观察测试",
             17,
             Color.rgb(168, 184, 210)
         );
@@ -84,9 +86,8 @@ public class MainActivity extends Activity {
         root.addView(subtitle);
 
         TextView warning = text(
-            "当前版本不会读取游戏画面，也不会点击游戏技能。" +
-            "这一版只测试悬浮球、大小设置、暂停和彻底关闭，" +
-            "避免出现无法关闭的问题。",
+            "V2可以持续读取画面并显示采集帧率，" +
+            "但不会保存画面，也不会自动点击游戏技能。",
             14,
             Color.rgb(255, 196, 105)
         );
@@ -201,6 +202,81 @@ public class MainActivity extends Activity {
         Toast.makeText(
             this,
             "悬浮球已经启动",
+            Toast.LENGTH_SHORT
+        ).show();
+    }
+
+
+    private static final int REQUEST_CAPTURE = 729;
+
+    private void requestScreenCapture() {
+        MediaProjectionManager manager =
+            (MediaProjectionManager)
+                getSystemService(
+                    Context
+                        .MEDIA_PROJECTION_SERVICE
+                );
+
+        startActivityForResult(
+            manager
+                .createScreenCaptureIntent(),
+            REQUEST_CAPTURE
+        );
+    }
+
+    @Override
+    protected void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent data
+    ) {
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data
+        );
+
+        if (requestCode != REQUEST_CAPTURE) {
+            return;
+        }
+
+        if (
+            resultCode != RESULT_OK
+            || data == null
+        ) {
+            Toast.makeText(
+                this,
+                "没有获得持续观察权限",
+                Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+
+        Intent capture =
+            new Intent(
+                this,
+                CaptureService.class
+            );
+
+        capture.putExtra(
+            CaptureService.EXTRA_CODE,
+            resultCode
+        );
+
+        capture.putExtra(
+            CaptureService.EXTRA_DATA,
+            data
+        );
+
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(capture);
+        } else {
+            startService(capture);
+        }
+
+        Toast.makeText(
+            this,
+            "持续观察已启动",
             Toast.LENGTH_SHORT
         ).show();
     }
