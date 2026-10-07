@@ -1,0 +1,235 @@
+name: Upgrade CipherAI V2-C
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update floating status
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "app/src/main/java/com/codeword/"
+              "cipherai/FloatingService.java"
+          )
+
+          text = path.read_text(encoding="utf-8")
+
+          if "private TextView stateView;" not in text:
+              text = text.replace(
+                  "private SharedPreferences prefs;",
+                  "private SharedPreferences prefs;\n"
+                  "    private TextView stateView;"
+              )
+
+          text = text.replace(
+              "TextView state = new TextView(this);",
+              "stateView = new TextView(this);"
+          )
+
+          text = text.replace(
+              "state.setText(",
+              "stateView.setText("
+          )
+
+          text = text.replace(
+              "state.setTextColor(",
+              "stateView.setTextColor("
+          )
+
+          text = text.replace(
+              "state.setTextSize(",
+              "stateView.setTextSize("
+          )
+
+          text = text.replace(
+              "state.setPadding(",
+              "stateView.setPadding("
+          )
+
+          text = text.replace(
+              "panel.addView(state);",
+              "panel.addView(stateView);\n"
+              "        updateCaptureStatus();"
+          )
+
+          old_click = '''                    if (!moved) {
+                        panel.setVisibility('''
+
+          new_click = '''                    if (!moved) {
+                        updateCaptureStatus();
+                        panel.setVisibility('''
+
+          text = text.replace(
+              old_click,
+              new_click
+          )
+
+          marker = '''    private void setSize(String size) {'''
+
+          method = '''
+              private void updateCaptureStatus() {
+                  if (stateView == null) {
+                      return;
+                  }
+
+                  boolean active =
+                      prefs.getBoolean(
+                          "capture_active",
+                          false
+                      );
+
+                  float fps =
+                      prefs.getFloat(
+                          "capture_fps",
+                          0f
+                      );
+
+                  String size =
+                      prefs.getString(
+                          "ball_size",
+                          "small"
+                      );
+
+                  String sizeName =
+                      "small".equals(size)
+                          ? "小"
+                          : "medium".equals(size)
+                              ? "中"
+                              : "大";
+
+                  stateView.setText(
+                      "持续观察："
+                          + (
+                              active
+                                  ? "运行中"
+                                  : "已停止"
+                          )
+                          + "\\n采集帧率："
+                          + String.format(
+                              "%.1f FPS",
+                              fps
+                          )
+                          + "\\n运行规模："
+                          + sizeName
+                          + "\\n自动操作：尚未启用"
+                  );
+              }
+
+          '''
+
+          if "private void updateCaptureStatus()" not in text:
+              text = text.replace(
+                  marker,
+                  method + marker
+              )
+
+          old_shutdown = '''    private void shutdown() {
+                  if (windowManager != null'''
+
+          new_shutdown = '''    private void shutdown() {
+                  Intent captureStop =
+                      new Intent(
+                          this,
+                          CaptureService.class
+                      );
+
+                  captureStop.setAction(
+                      CaptureService.ACTION_STOP
+                  );
+
+                  startService(captureStop);
+
+                  if (windowManager != null'''
+
+          if "Intent captureStop" not in text:
+              text = text.replace(
+                  old_shutdown,
+                  new_shutdown
+              )
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Add source build workflow
+        run: |
+          cat > .github/workflows/build-source-apk.yml <<'EOF'
+          name: Build CipherAI Source APK
+
+          on:
+            workflow_dispatch:
+
+          permissions:
+            contents: write
+
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+
+              steps:
+                - name: Checkout
+                  uses: actions/checkout@v4
+
+                - name: Set up Java
+                  uses: actions/setup-java@v4
+                  with:
+                    distribution: temurin
+                    java-version: "17"
+
+                - name: Set up Gradle
+                  uses: gradle/actions/setup-gradle@v4
+                  with:
+                    gradle-version: "8.9"
+
+                - name: Build APK
+                  run: |
+                    gradle :app:assembleDebug \
+                      --no-daemon
+
+                - name: Publish direct APK
+                  env:
+                    GH_TOKEN: ${{ github.token }}
+                  run: |
+                    APK="app/build/outputs/apk/debug/app-debug.apk"
+
+                    if gh release view latest \
+                      >/dev/null 2>&1
+                    then
+                      gh release upload latest \
+                        "$APK" \
+                        --clobber
+                    else
+                      gh release create latest \
+                        "$APK" \
+                        --title "暗号AI V2" \
+                        --notes \
+                          "V2持续观察和帧率测试版本" \
+                        --latest
+                    fi
+          EOF
+
+      - name: Save V2-C
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add \
+            app/src/main/java/com/codeword/cipherai/FloatingService.java \
+            .github/workflows/build-source-apk.yml
+
+          git commit \
+            -m "Finish CipherAI V2 capture interface" \
+            || exit 0
+
+          git push
