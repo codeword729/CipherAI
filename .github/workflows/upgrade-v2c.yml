@@ -226,7 +226,7 @@ jobs:
 
           git add \
             app/src/main/java/com/codeword/cipherai/FloatingService.java \
-            .github/workflows/build-source-apk.yml
+            app/src/main/java/com/codeword/cipherai/FloatingService.java
 
           git commit \
             -m "Finish CipherAI V2 capture interface" \
