@@ -1,0 +1,203 @@
+name: Upgrade CipherAI V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add V2 screen capture
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          manifest = Path("app/src/main/AndroidManifest.xml")
+          text = manifest.read_text(encoding="utf-8")
+
+          text = text.replace(
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+              '''<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />'''
+          )
+
+          text = text.replace(
+              '''<service
+                      android:name=".FloatingService"''',
+              '''<service
+                      android:name=".CaptureService"
+                      android:exported="false"
+                      android:foregroundServiceType="mediaProjection" />
+
+                  <service
+                      android:name=".FloatingService"'''
+          )
+
+          manifest.write_text(text, encoding="utf-8")
+
+          main = Path(
+              "app/src/main/java/com/codeword/cipherai/MainActivity.java"
+          )
+          text = main.read_text(encoding="utf-8")
+
+          text = text.replace(
+              "import android.app.Activity;",
+              '''import android.app.Activity;
+          import android.media.projection.MediaProjectionManager;
+          import android.content.Context;'''
+          )
+
+          old = '''Toast.makeText(
+                      this,
+                      "悬浮球已经启动",
+                      Toast.LENGTH_SHORT
+                  ).show();'''
+
+          new = '''Toast.makeText(
+                      this,
+                      "悬浮球已经启动，接下来授权持续观察",
+                      Toast.LENGTH_SHORT
+                  ).show();
+
+                  requestScreenCapture();'''
+
+          text = text.replace(old, new)
+
+          marker = '''              private void saveSize(String size) {'''
+
+          methods = '''
+              private static final int REQUEST_CAPTURE = 729;
+
+              private void requestScreenCapture() {
+                  MediaProjectionManager manager =
+                      (MediaProjectionManager) getSystemService(
+                          Context.MEDIA_PROJECTION_SERVICE
+                      );
+
+                  startActivityForResult(
+                      manager.createScreenCaptureIntent(),
+                      REQUEST_CAPTURE
+                  );
+              }
+
+              @Override
+              protected void onActivityResult(
+                  int requestCode,
+                  int resultCode,
+                  Intent data
+              ) {
+                  super.onActivityResult(
+                      requestCode,
+                      resultCode,
+                      data
+                  );
+
+                  if (requestCode != REQUEST_CAPTURE) {
+                      return;
+                  }
+
+                  if (resultCode != RESULT_OK || data == null) {
+                      Toast.makeText(
+                          this,
+                          "没有获得持续观察权限",
+                          Toast.LENGTH_LONG
+                      ).show();
+                      return;
+                  }
+
+                  Intent service =
+                      new Intent(this, CaptureService.class);
+
+                  service.putExtra(
+                      CaptureService.EXTRA_RESULT_CODE,
+                      resultCode
+                  );
+
+                  service.putExtra(
+                      CaptureService.EXTRA_RESULT_DATA,
+                      data
+                  );
+
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(service);
+                  } else {
+                      startService(service);
+                  }
+
+                  Toast.makeText(
+                      this,
+                      "持续观察已经启动",
+                      Toast.LENGTH_SHORT
+                  ).show();
+              }
+
+          '''
+
+          text = text.replace(marker, methods + marker)
+
+          old_stop = '''Intent intent =
+                          new Intent(this, FloatingService.class);
+                      intent.setAction(FloatingService.ACTION_STOP);
+                      startService(intent);'''
+
+          new_stop = '''Intent intent =
+                          new Intent(this, FloatingService.class);
+                      intent.setAction(FloatingService.ACTION_STOP);
+                      startService(intent);
+
+                      Intent capture =
+                          new Intent(this, CaptureService.class);
+                      capture.setAction(CaptureService.ACTION_STOP);
+                      startService(capture);'''
+
+          text = text.replace(old_stop, new_stop)
+          main.write_text(text, encoding="utf-8")
+
+          floating = Path(
+              "app/src/main/java/com/codeword/cipherai/FloatingService.java"
+          )
+          text = floating.read_text(encoding="utf-8")
+
+          text = text.replace(
+              "import android.os.IBinder;",
+              '''import android.os.IBinder;
+          import android.os.Handler;
+          import android.os.Looper;'''
+          )
+
+          text = text.replace(
+              "private SharedPreferences prefs;",
+              '''private SharedPreferences prefs;
+              private TextView stateView;
+              private final Handler statusHandler =
+                  new Handler(Looper.getMainLooper());'''
+          )
+
+          text = text.replace(
+              "TextView state = new TextView(this);",
+              "stateView = new TextView(this);"
+          )
+
+          text = text.replace(
+              "state.setText(",
+              "stateView.setText("
+          )
+
+          text = text.replace(
+              "state.setTextColor(",
+              "stateView.setTextColor("
+          )
+
+          text = text.replace(
+              "state.setTextSize(",
+              "stateView.setTextSize("
+          )
+
+          text
