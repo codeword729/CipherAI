@@ -38,6 +38,7 @@ public class FloatingService extends Service {
     private LinearLayout panel;
     private WindowManager.LayoutParams params;
     private SharedPreferences prefs;
+    private TextView stateView;
 
     private float touchX;
     private float touchY;
@@ -231,16 +232,17 @@ public class FloatingService extends Service {
             )
         );
 
-        TextView state = new TextView(this);
-        state.setText(
+        stateView = new TextView(this);
+        stateView.setText(
             "持续观察：尚未接入\n" +
             "自动操作：尚未接入\n" +
             "当前为安全悬浮球测试版"
         );
-        state.setTextColor(Color.WHITE);
-        state.setTextSize(13);
-        state.setPadding(12, 12, 12, 12);
-        panel.addView(state);
+        stateView.setTextColor(Color.WHITE);
+        stateView.setTextSize(13);
+        stateView.setPadding(12, 12, 12, 12);
+        panel.addView(stateView);
+        updateCaptureStatus();
 
         Button small = panelButton("小");
         Button medium = panelButton("中");
@@ -343,6 +345,55 @@ public class FloatingService extends Service {
         }
     }
 
+
+    private void updateCaptureStatus() {
+        if (stateView == null) {
+            return;
+        }
+
+        boolean active =
+            prefs.getBoolean(
+                "capture_active",
+                false
+            );
+
+        float fps =
+            prefs.getFloat(
+                "capture_fps",
+                0f
+            );
+
+        String size =
+            prefs.getString(
+                "ball_size",
+                "small"
+            );
+
+        String sizeName =
+            "small".equals(size)
+                ? "小"
+                : "medium".equals(size)
+                    ? "中"
+                    : "大";
+
+        stateView.setText(
+            "持续观察："
+                + (
+                    active
+                        ? "运行中"
+                        : "已停止"
+                )
+                + "\n采集帧率："
+                + String.format(
+                    "%.1f FPS",
+                    fps
+                )
+                + "\n运行规模："
+                + sizeName
+                + "\n自动操作：尚未启用"
+        );
+    }
+
     private void setSize(String size) {
         prefs.edit()
             .putString("ball_size", size)
@@ -389,6 +440,18 @@ public class FloatingService extends Service {
     }
 
     private void shutdown() {
+        Intent captureStop =
+            new Intent(
+                this,
+                CaptureService.class
+            );
+
+        captureStop.setAction(
+            CaptureService.ACTION_STOP
+        );
+
+        startService(captureStop);
+
         if (windowManager != null
             && container != null) {
             try {
