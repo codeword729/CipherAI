@@ -101,6 +101,16 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v -> startFloating());
         root.addView(start);
 
+        Button captureButton = button(
+            "③ 授权并启动持续观察"
+        );
+
+        captureButton.setOnClickListener(
+            v -> requestScreenCapture()
+        );
+
+        root.addView(captureButton);
+
         root.addView(text("悬浮球大小", 18, Color.WHITE));
 
         LinearLayout sizes = new LinearLayout(this);
