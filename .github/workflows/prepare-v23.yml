@@ -1,0 +1,47 @@
+name: Prepare CipherAI V2.3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize capture source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "app/src/main/java/com/codeword/cipherai/CaptureService.java"
+          )
+
+          text = path.read_text(encoding="utf-8")
+
+          text = text.replace(
+              "\n            .put",
+              "\n    .put"
+          )
+
+          text = text.replace(
+              "\n            .apply();",
+              "\n    .apply();"
+          )
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Save preparation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/codeword/cipherai/CaptureService.java
+          git commit -m "Prepare CaptureService for V2.3 patch"
+          git push
