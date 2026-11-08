@@ -1,0 +1,339 @@
+name: Upgrade CipherAI V2.3 Diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add real capture diagnostics
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          capture_path = Path(
+              "app/src/main/java/com/codeword/cipherai/CaptureService.java"
+          )
+          capture = capture_path.read_text(encoding="utf-8")
+
+          if "private long totalFrames;" not in capture:
+              marker = (
+                  "    private long frames;\n"
+                  "    private long lastTime;"
+              )
+              replacement = (
+                  "    private long frames;\n"
+                  "    private long totalFrames;\n"
+                  "    private long lastFrameTime;\n"
+                  "    private long lastSignature = Long.MIN_VALUE;\n"
+                  "    private boolean pictureMoving;\n"
+                  "    private int captureWidth;\n"
+                  "    private int captureHeight;\n"
+                  "    private long lastTime;"
+              )
+              assert marker in capture
+              capture = capture.replace(marker, replacement, 1)
+
+              marker = (
+                  "        frames = 0;\n"
+                  "        lastTime = System.currentTimeMillis();"
+              )
+              replacement = (
+                  "        frames = 0;\n"
+                  "        totalFrames = 0;\n"
+                  "        lastFrameTime = 0;\n"
+                  "        lastSignature = Long.MIN_VALUE;\n"
+                  "        pictureMoving = false;\n"
+                  "        captureWidth = width;\n"
+                  "        captureHeight = height;\n"
+                  "        lastTime = System.currentTimeMillis();"
+              )
+              assert marker in capture
+              capture = capture.replace(marker, replacement, 1)
+
+              marker = (
+                  "                    if (image != null) {\n"
+                  "                        frames++;\n"
+                  "                        updateFps();\n"
+                  "                    }"
+              )
+              replacement = '''                    if (image != null) {
+                          frames++;
+                          totalFrames++;
+                          lastFrameTime =
+                              System.currentTimeMillis();
+
+                          long signature = 0;
+                          Image.Plane[] planes =
+                              image.getPlanes();
+
+                          if (
+                              planes != null
+                              && planes.length > 0
+                              && planes[0].getBuffer() != null
+                          ) {
+                              java.nio.ByteBuffer buffer =
+                                  planes[0]
+                                      .getBuffer()
+                                      .duplicate();
+
+                              int remaining =
+                                  buffer.remaining();
+                              int step =
+                                  Math.max(
+                                      1,
+                                      remaining / 256
+                                  );
+
+                              for (
+                                  int position = 0;
+                                  position < remaining;
+                                  position += step
+                              ) {
+                                  signature +=
+                                      buffer.get(position)
+                                      & 0xff;
+                              }
+                          }
+
+                          if (
+                              lastSignature
+                                  != Long.MIN_VALUE
+                          ) {
+                              pictureMoving =
+                                  Math.abs(
+                                      signature
+                                      - lastSignature
+                                  ) > 64;
+                          }
+
+                          lastSignature = signature;
+                          updateFps();
+                      }'''
+              assert marker in capture
+              capture = capture.replace(marker, replacement, 1)
+
+              marker = '''        prefs.edit()
+              .putBoolean("capture_active", true)
+              .putFloat("capture_fps", 0f)
+              .apply();'''
+              replacement = '''        prefs.edit()
+              .putBoolean("capture_active", true)
+              .putFloat("capture_fps", 0f)
+              .putLong("capture_total_frames", 0)
+              .putLong("capture_last_frame", 0)
+              .putInt("capture_width", width)
+              .putInt("capture_height", height)
+              .putBoolean("capture_moving", false)
+              .apply();'''
+              assert marker in capture
+              capture = capture.replace(marker, replacement, 1)
+
+              marker = '''        prefs.edit()
+              .putFloat("capture_fps", fps)
+              .apply();'''
+              replacement = '''        prefs.edit()
+              .putFloat("capture_fps", fps)
+              .putLong(
+                  "capture_total_frames",
+                  totalFrames
+              )
+              .putLong(
+                  "capture_last_frame",
+                  lastFrameTime
+              )
+              .putInt(
+                  "capture_width",
+                  captureWidth
+              )
+              .putInt(
+                  "capture_height",
+                  captureHeight
+              )
+              .putBoolean(
+                  "capture_moving",
+                  pictureMoving
+              )
+              .apply();'''
+              assert marker in capture
+              capture = capture.replace(marker, replacement, 1)
+
+          capture_path.write_text(
+              capture,
+              encoding="utf-8"
+          )
+
+          floating_path = Path(
+              "app/src/main/java/com/codeword/cipherai/FloatingService.java"
+          )
+          floating = floating_path.read_text(encoding="utf-8")
+
+          start = floating.index(
+              "    private void updateCaptureStatus() {"
+          )
+          end = floating.index(
+              "    private void setSize(String size) {",
+              start
+          )
+
+          new_method = '''    private void updateCaptureStatus() {
+              if (stateView == null) {
+                  return;
+              }
+
+              boolean active =
+                  prefs.getBoolean(
+                      "capture_active",
+                      false
+                  );
+
+              float fps =
+                  prefs.getFloat(
+                      "capture_fps",
+                      0f
+                  );
+
+              long totalFrames =
+                  prefs.getLong(
+                      "capture_total_frames",
+                      0
+                  );
+
+              long lastFrame =
+                  prefs.getLong(
+                      "capture_last_frame",
+                      0
+                  );
+
+              int width =
+                  prefs.getInt(
+                      "capture_width",
+                      0
+                  );
+
+              int height =
+                  prefs.getInt(
+                      "capture_height",
+                      0
+                  );
+
+              boolean moving =
+                  prefs.getBoolean(
+                      "capture_moving",
+                      false
+                  );
+
+              String size =
+                  prefs.getString(
+                      "ball_size",
+                      "small"
+                  );
+
+              String sizeName =
+                  "small".equals(size)
+                      ? "小"
+                      : "medium".equals(size)
+                          ? "中"
+                          : "大";
+
+              String lastFrameText;
+
+              if (lastFrame <= 0) {
+                  lastFrameText = "尚未收到";
+              } else {
+                  long age =
+                      Math.max(
+                          0,
+                          System.currentTimeMillis()
+                              - lastFrame
+                      );
+
+                  lastFrameText =
+                      age < 2000
+                          ? "刚刚"
+                          : (age / 1000) + "秒前";
+              }
+
+              stateView.setText(
+                  "持续观察："
+                      + (
+                          active
+                              ? "运行中"
+                              : "已停止"
+                      )
+                      + "\\n采集帧率："
+                      + String.format(
+                          "%.1f FPS",
+                          fps
+                      )
+                      + "\\n总帧数："
+                      + totalFrames
+                      + "\\n采集分辨率："
+                      + (
+                          width > 0
+                              ? width + "×" + height
+                              : "未知"
+                      )
+                      + "\\n最后一帧："
+                      + lastFrameText
+                      + "\\n画面状态："
+                      + (
+                          moving
+                              ? "正在变化"
+                              : "暂未检测到明显变化"
+                      )
+                      + "\\n运行规模："
+                      + sizeName
+                      + "\\n模型：未加载"
+                      + "\\n猎杀目标：未指定"
+                      + "\\n自动操作：关闭"
+              );
+          }
+
+          '''
+
+          floating = (
+              floating[:start]
+              + new_method
+              + floating[end:]
+          )
+
+          floating_path.write_text(
+              floating,
+              encoding="utf-8"
+          )
+
+          gradle_path = Path("app/build.gradle")
+          gradle = gradle_path.read_text(
+              encoding="utf-8"
+          )
+          gradle = gradle.replace(
+              "versionCode 3",
+              "versionCode 4"
+          )
+          gradle = gradle.replace(
+              'versionName "0.2.2"',
+              'versionName "0.2.3"'
+          )
+          gradle_path.write_text(
+              gradle,
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Save V2.3 source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git commit -m "Add V2.3 real capture diagnostics"
+          git push
