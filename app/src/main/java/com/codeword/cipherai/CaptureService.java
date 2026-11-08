@@ -274,9 +274,9 @@ public class CaptureService extends Service {
         );
 
         prefs.edit()
-            .putBoolean("capture_active", true)
-            .putFloat("capture_fps", 0f)
-            .apply();
+    .putBoolean("capture_active", true)
+    .putFloat("capture_fps", 0f)
+    .apply();
     }
 
     private void updateFps() {
@@ -291,8 +291,8 @@ public class CaptureService extends Service {
             frames * 1000f / elapsed;
 
         prefs.edit()
-            .putFloat("capture_fps", fps)
-            .apply();
+    .putFloat("capture_fps", fps)
+    .apply();
 
         NotificationManager manager =
             (NotificationManager) getSystemService(
