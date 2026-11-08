@@ -12,6 +12,8 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.IBinder;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -39,6 +41,17 @@ public class FloatingService extends Service {
     private WindowManager.LayoutParams params;
     private SharedPreferences prefs;
     private TextView stateView;
+    private final Handler statusHandler =
+        new Handler(Looper.getMainLooper());
+
+    private final Runnable statusUpdater =
+        new Runnable() {
+            @Override
+            public void run() {
+                updateCaptureStatus();
+                statusHandler.postDelayed(this, 1000);
+            }
+        };
 
     private float touchX;
     private float touchY;
@@ -62,6 +75,7 @@ public class FloatingService extends Service {
         );
 
         createFloatingView();
+        statusHandler.post(statusUpdater);
     }
 
     @Override
@@ -440,6 +454,8 @@ public class FloatingService extends Service {
     }
 
     private void shutdown() {
+        statusHandler.removeCallbacks(statusUpdater);
+
         Intent captureStop =
             new Intent(
                 this,
@@ -467,6 +483,8 @@ public class FloatingService extends Service {
 
     @Override
     public void onDestroy() {
+        statusHandler.removeCallbacks(statusUpdater);
+
         if (windowManager != null
             && container != null) {
             try {
