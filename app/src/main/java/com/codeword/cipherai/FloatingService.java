@@ -361,52 +361,118 @@ public class FloatingService extends Service {
 
 
     private void updateCaptureStatus() {
-        if (stateView == null) {
-            return;
-        }
-
-        boolean active =
-            prefs.getBoolean(
-                "capture_active",
-                false
-            );
-
-        float fps =
-            prefs.getFloat(
-                "capture_fps",
-                0f
-            );
-
-        String size =
-            prefs.getString(
-                "ball_size",
-                "small"
-            );
-
-        String sizeName =
-            "small".equals(size)
-                ? "小"
-                : "medium".equals(size)
-                    ? "中"
-                    : "大";
-
-        stateView.setText(
-            "持续观察："
-                + (
-                    active
-                        ? "运行中"
-                        : "已停止"
-                )
-                + "\n采集帧率："
-                + String.format(
-                    "%.1f FPS",
-                    fps
-                )
-                + "\n运行规模："
-                + sizeName
-                + "\n自动操作：尚未启用"
-        );
+    if (stateView == null) {
+        return;
     }
+
+    boolean active =
+        prefs.getBoolean(
+            "capture_active",
+            false
+        );
+
+    float fps =
+        prefs.getFloat(
+            "capture_fps",
+            0f
+        );
+
+    long totalFrames =
+        prefs.getLong(
+            "capture_total_frames",
+            0
+        );
+
+    long lastFrame =
+        prefs.getLong(
+            "capture_last_frame",
+            0
+        );
+
+    int width =
+        prefs.getInt(
+            "capture_width",
+            0
+        );
+
+    int height =
+        prefs.getInt(
+            "capture_height",
+            0
+        );
+
+    boolean moving =
+        prefs.getBoolean(
+            "capture_moving",
+            false
+        );
+
+    String size =
+        prefs.getString(
+            "ball_size",
+            "small"
+        );
+
+    String sizeName =
+        "small".equals(size)
+            ? "小"
+            : "medium".equals(size)
+                ? "中"
+                : "大";
+
+    String lastFrameText;
+
+    if (lastFrame <= 0) {
+        lastFrameText = "尚未收到";
+    } else {
+        long age =
+            Math.max(
+                0,
+                System.currentTimeMillis()
+                    - lastFrame
+            );
+
+        lastFrameText =
+            age < 2000
+                ? "刚刚"
+                : (age / 1000) + "秒前";
+    }
+
+    stateView.setText(
+        "持续观察："
+            + (
+                active
+                    ? "运行中"
+                    : "已停止"
+            )
+            + "\n采集帧率："
+            + String.format(
+                "%.1f FPS",
+                fps
+            )
+            + "\n总帧数："
+            + totalFrames
+            + "\n采集分辨率："
+            + (
+                width > 0
+                    ? width + "×" + height
+                    : "未知"
+            )
+            + "\n最后一帧："
+            + lastFrameText
+            + "\n画面状态："
+            + (
+                moving
+                    ? "正在变化"
+                    : "暂未检测到明显变化"
+            )
+            + "\n运行规模："
+            + sizeName
+            + "\n模型：未加载"
+            + "\n猎杀目标：未指定"
+            + "\n自动操作：关闭"
+    );
+}
 
     private void setSize(String size) {
         prefs.edit()

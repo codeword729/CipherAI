@@ -45,6 +45,12 @@ public class CaptureService extends Service {
     private SharedPreferences prefs;
 
     private long frames;
+    private long totalFrames;
+    private long lastFrameTime;
+    private long lastSignature = Long.MIN_VALUE;
+    private boolean pictureMoving;
+    private int captureWidth;
+    private int captureHeight;
     private long lastTime;
 
     @Override
@@ -238,6 +244,12 @@ public class CaptureService extends Service {
         handler = new Handler(thread.getLooper());
 
         frames = 0;
+        totalFrames = 0;
+        lastFrameTime = 0;
+        lastSignature = Long.MIN_VALUE;
+        pictureMoving = false;
+        captureWidth = width;
+        captureHeight = height;
         lastTime = System.currentTimeMillis();
 
         reader.setOnImageAvailableListener(
@@ -249,9 +261,58 @@ public class CaptureService extends Service {
                         source.acquireLatestImage();
 
                     if (image != null) {
-                        frames++;
-                        updateFps();
+                frames++;
+                totalFrames++;
+                lastFrameTime =
+                    System.currentTimeMillis();
+
+                long signature = 0;
+                Image.Plane[] planes =
+                    image.getPlanes();
+
+                if (
+                    planes != null
+                    && planes.length > 0
+                    && planes[0].getBuffer() != null
+                ) {
+                    java.nio.ByteBuffer buffer =
+                        planes[0]
+                            .getBuffer()
+                            .duplicate();
+
+                    int remaining =
+                        buffer.remaining();
+                    int step =
+                        Math.max(
+                            1,
+                            remaining / 256
+                        );
+
+                    for (
+                        int position = 0;
+                        position < remaining;
+                        position += step
+                    ) {
+                        signature +=
+                            buffer.get(position)
+                            & 0xff;
                     }
+                }
+
+                if (
+                    lastSignature
+                        != Long.MIN_VALUE
+                ) {
+                    pictureMoving =
+                        Math.abs(
+                            signature
+                            - lastSignature
+                        ) > 64;
+                }
+
+                lastSignature = signature;
+                updateFps();
+            }
                 } finally {
                     if (image != null) {
                         image.close();
@@ -276,6 +337,11 @@ public class CaptureService extends Service {
         prefs.edit()
     .putBoolean("capture_active", true)
     .putFloat("capture_fps", 0f)
+    .putLong("capture_total_frames", 0)
+    .putLong("capture_last_frame", 0)
+    .putInt("capture_width", width)
+    .putInt("capture_height", height)
+    .putBoolean("capture_moving", false)
     .apply();
     }
 
@@ -292,6 +358,26 @@ public class CaptureService extends Service {
 
         prefs.edit()
     .putFloat("capture_fps", fps)
+    .putLong(
+        "capture_total_frames",
+        totalFrames
+    )
+    .putLong(
+        "capture_last_frame",
+        lastFrameTime
+    )
+    .putInt(
+        "capture_width",
+        captureWidth
+    )
+    .putInt(
+        "capture_height",
+        captureHeight
+    )
+    .putBoolean(
+        "capture_moving",
+        pictureMoving
+    )
     .apply();
 
         NotificationManager manager =
