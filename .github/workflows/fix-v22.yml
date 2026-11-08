@@ -1,0 +1,125 @@
+name: Fix CipherAI V2.2 Capture
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix capture service and FPS refresh
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest_path = Path("app/src/main/AndroidManifest.xml")
+          manifest = manifest_path.read_text(encoding="utf-8")
+
+          if 'android:name=".CaptureService"' not in manifest:
+              marker = "\n    </application>"
+              service = '''
+                  <service
+                      android:name=".CaptureService"
+                      android:exported="false"
+                      android:foregroundServiceType="mediaProjection" />
+          '''
+              assert marker in manifest
+              manifest = manifest.replace(marker, service + marker, 1)
+
+          manifest_path.write_text(manifest, encoding="utf-8")
+
+          java_path = Path(
+              "app/src/main/java/com/codeword/cipherai/FloatingService.java"
+          )
+          java = java_path.read_text(encoding="utf-8")
+
+          if "import android.os.Handler;" not in java:
+              java = java.replace(
+                  "import android.os.Build;",
+                  "import android.os.Build;\n"
+                  "import android.os.Handler;\n"
+                  "import android.os.Looper;",
+                  1
+              )
+
+          if "statusUpdater" not in java:
+              marker = "    private TextView stateView;"
+              replacement = '''    private TextView stateView;
+              private final Handler statusHandler =
+                  new Handler(Looper.getMainLooper());
+
+              private final Runnable statusUpdater =
+                  new Runnable() {
+                      @Override
+                      public void run() {
+                          updateCaptureStatus();
+                          statusHandler.postDelayed(this, 1000);
+                      }
+                  };'''
+
+              assert marker in java
+              java = java.replace(marker, replacement, 1)
+
+              marker = "        createFloatingView();\n    }"
+              replacement = (
+                  "        createFloatingView();\n"
+                  "        statusHandler.post(statusUpdater);\n"
+                  "    }"
+              )
+              assert marker in java
+              java = java.replace(marker, replacement, 1)
+
+              marker = (
+                  "    private void shutdown() {\n"
+                  "        Intent captureStop ="
+              )
+              replacement = (
+                  "    private void shutdown() {\n"
+                  "        statusHandler.removeCallbacks(statusUpdater);\n\n"
+                  "        Intent captureStop ="
+              )
+              assert marker in java
+              java = java.replace(marker, replacement, 1)
+
+              marker = (
+                  "    public void onDestroy() {\n"
+                  "        if (windowManager != null"
+              )
+              replacement = (
+                  "    public void onDestroy() {\n"
+                  "        statusHandler.removeCallbacks(statusUpdater);\n\n"
+                  "        if (windowManager != null"
+              )
+              assert marker in java
+              java = java.replace(marker, replacement, 1)
+
+          java_path.write_text(java, encoding="utf-8")
+
+          gradle_path = Path("app/build.gradle")
+          gradle = gradle_path.read_text(encoding="utf-8")
+          gradle = gradle.replace(
+              "versionCode 2",
+              "versionCode 3"
+          )
+          gradle = gradle.replace(
+              'versionName "0.2.1"',
+              'versionName "0.2.2"'
+          )
+          gradle_path.write_text(gradle, encoding="utf-8")
+          PY
+
+      - name: Save V2.2 source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git commit -m "Fix V2.2 capture service and live FPS"
+          git push
