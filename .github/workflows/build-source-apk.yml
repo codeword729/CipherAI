@@ -33,7 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
        
-          cp app/build/outputs/apk/debug/app-debug.apk CipherAI-v2.2.apk.apk
+          cp app/build/outputs/apk/debug/app-debug.apk CipherAI-v2.2.apk
           APK="CipherAI-v2.2.apk"
              
           
