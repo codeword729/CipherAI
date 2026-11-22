@@ -1,0 +1,61 @@
+name: Prepare CipherAI V2.4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare V2.4 insertion points
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "app/src/main/java/com/codeword/cipherai/FloatingService.java"
+          )
+
+          text = path.read_text(encoding="utf-8")
+
+          old = '''    boolean moving =
+                  prefs.getBoolean(
+                      "capture_moving",
+                      false
+                  );'''
+
+          new = '''              boolean moving =
+                  prefs.getBoolean(
+                      "capture_moving",
+                      false
+                  );'''
+
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''            + "\\n自动操作：关闭"
+              );'''
+
+          new = '''                      + "\\n自动操作：关闭"
+                  );'''
+
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Save preparation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/codeword/cipherai/FloatingService.java
+          git commit -m "Prepare FloatingService for V2.4 clicker"
+          git push
