@@ -25,26 +25,34 @@ jobs:
 
           text = path.read_text(encoding="utf-8")
 
-          old = '''    boolean moving =
-                  prefs.getBoolean(
-                      "capture_moving",
-                      false
-                  );'''
+          old = (
+              "    boolean moving =\n"
+              "        prefs.getBoolean(\n"
+              "            \"capture_moving\",\n"
+              "            false\n"
+              "        );"
+          )
 
-          new = '''              boolean moving =
-                  prefs.getBoolean(
-                      "capture_moving",
-                      false
-                  );'''
+          new = (
+              "              boolean moving =\n"
+              "            prefs.getBoolean(\n"
+              "                \"capture_moving\",\n"
+              "                false\n"
+              "            );"
+          )
 
           assert old in text
           text = text.replace(old, new, 1)
 
-          old = '''            + "\\n自动操作：关闭"
-              );'''
+          old = (
+              "            + \"\\n自动操作：关闭\"\n"
+              "    );"
+          )
 
-          new = '''                      + "\\n自动操作：关闭"
-                  );'''
+          new = (
+              "                      + \"\\n自动操作：关闭\"\n"
+              "        );"
+          )
 
           assert old in text
           text = text.replace(old, new, 1)
