@@ -401,11 +401,11 @@ public class FloatingService extends Service {
             0
         );
 
-    boolean moving =
-        prefs.getBoolean(
-            "capture_moving",
-            false
-        );
+              boolean moving =
+            prefs.getBoolean(
+                "capture_moving",
+                false
+            );
 
     String size =
         prefs.getString(
@@ -470,8 +470,8 @@ public class FloatingService extends Service {
             + sizeName
             + "\n模型：未加载"
             + "\n猎杀目标：未指定"
-            + "\n自动操作：关闭"
-    );
+                      + "\n自动操作：关闭"
+        );
 }
 
     private void setSize(String size) {
