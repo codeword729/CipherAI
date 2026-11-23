@@ -262,6 +262,19 @@ public class FloatingService extends Service {
         Button medium = panelButton("中");
         Button large = panelButton("大");
         Button pause = panelButton("暂停显示");
+
+        Button starSlow =
+            panelButton("祭坛速度：慢");
+        Button starMedium =
+            panelButton("祭坛速度：中");
+        Button starFast =
+            panelButton("祭坛速度：快");
+
+        Button starStart =
+            panelButton("★ 启动祭坛连点");
+        Button starPause =
+            panelButton("暂停祭坛连点");
+
         Button stop =
             panelButton("■ 停止并退出悬浮服务");
 
@@ -271,6 +284,11 @@ public class FloatingService extends Service {
         panel.addView(medium);
         panel.addView(large);
         panel.addView(pause);
+        panel.addView(starSlow);
+        panel.addView(starMedium);
+        panel.addView(starFast);
+        panel.addView(starStart);
+        panel.addView(starPause);
         panel.addView(stop);
 
         container.addView(panel);
@@ -281,6 +299,26 @@ public class FloatingService extends Service {
 
         pause.setOnClickListener(v ->
             panel.setVisibility(View.GONE)
+        );
+
+        starSlow.setOnClickListener(
+            v -> setStarSpeed("slow")
+        );
+
+        starMedium.setOnClickListener(
+            v -> setStarSpeed("medium")
+        );
+
+        starFast.setOnClickListener(
+            v -> setStarSpeed("fast")
+        );
+
+        starStart.setOnClickListener(
+            v -> startStarClicking()
+        );
+
+        starPause.setOnClickListener(
+            v -> stopStarClicking()
         );
 
         stop.setOnClickListener(v -> shutdown());
@@ -407,6 +445,37 @@ public class FloatingService extends Service {
                 false
             );
 
+        boolean starClicking =
+            prefs.getBoolean(
+                "star_click_enabled",
+                false
+            );
+
+        boolean starReady =
+            prefs.getBoolean(
+                "star_accessibility_ready",
+                false
+            );
+
+        long starCount =
+            prefs.getLong(
+                "star_click_count",
+                0
+            );
+
+        String starSpeed =
+            prefs.getString(
+                "star_click_speed",
+                "slow"
+            );
+
+        String starSpeedName =
+            "fast".equals(starSpeed)
+                ? "快"
+                : "medium".equals(starSpeed)
+                    ? "中"
+                    : "慢";
+
     String size =
         prefs.getString(
             "ball_size",
@@ -470,11 +539,77 @@ public class FloatingService extends Service {
             + sizeName
             + "\n模型：未加载"
             + "\n猎杀目标：未指定"
-                      + "\n自动操作：关闭"
+                      + "\n自动操作："
+            + (
+                starClicking
+                    ? "祭坛连点运行中"
+                    : "关闭"
+            )
+            + "\n无障碍："
+            + (
+                starReady
+                    ? "已连接"
+                    : "未连接"
+            )
+            + "\n祭坛速度："
+            + starSpeedName
+            + "\n本次点击："
+            + starCount
         );
 }
 
-    private void setSize(String size) {
+    private void setStarSpeed(
+        String speed
+    ) {
+        prefs.edit()
+            .putString(
+                "star_click_speed",
+                speed
+            )
+            .apply();
+
+        updateCaptureStatus();
+    }
+
+    private void startStarClicking() {
+        boolean ready =
+            prefs.getBoolean(
+                "star_accessibility_ready",
+                false
+            );
+
+        if (!ready) {
+            android.widget.Toast.makeText(
+                this,
+                "请先在系统无障碍设置中开启暗号AI V2",
+                android.widget.Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+
+        prefs.edit()
+            .putLong("star_click_count", 0)
+            .putBoolean(
+                "star_click_enabled",
+                true
+            )
+            .apply();
+
+        updateCaptureStatus();
+    }
+
+    private void stopStarClicking() {
+        prefs.edit()
+            .putBoolean(
+                "star_click_enabled",
+                false
+            )
+            .apply();
+
+        updateCaptureStatus();
+    }
+
+        private void setSize(String size) {
         prefs.edit()
             .putString("ball_size", size)
             .apply();
@@ -521,6 +656,13 @@ public class FloatingService extends Service {
 
     private void shutdown() {
         statusHandler.removeCallbacks(statusUpdater);
+
+        prefs.edit()
+            .putBoolean(
+                "star_click_enabled",
+                false
+            )
+            .apply();
 
         Intent captureStop =
             new Intent(

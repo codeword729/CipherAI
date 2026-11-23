@@ -111,6 +111,40 @@ public class MainActivity extends Activity {
 
         root.addView(captureButton);
 
+        Button accessibility = button(
+            "④ 打开无障碍设置"
+        );
+
+        accessibility.setOnClickListener(
+            v -> {
+                Intent intent =
+                    new Intent(
+                        Settings
+                            .ACTION_ACCESSIBILITY_SETTINGS
+                    );
+
+                startActivity(intent);
+
+                Toast.makeText(
+                    this,
+                    "请在无障碍列表中开启暗号AI V2",
+                    Toast.LENGTH_LONG
+                ).show();
+            }
+        );
+
+        root.addView(accessibility);
+
+        TextView starWarning = text(
+            "V2.4星星祭坛连点：先开启无障碍，"
+                + "再从悬浮球手动启动。"
+                + "离开祭坛必须暂停。",
+            14,
+            Color.rgb(255, 150, 100)
+        );
+
+        root.addView(starWarning);
+
         root.addView(text("悬浮球大小", 18, Color.WHITE));
 
         LinearLayout sizes = new LinearLayout(this);
