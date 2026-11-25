@@ -2,6 +2,10 @@ name: Fix CipherAI V2.4.1 Panel
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-v241-panel.yml'
+  
 
 permissions:
   contents: write
