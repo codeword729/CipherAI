@@ -36,8 +36,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
        
-          cp app/build/outputs/apk/debug/app-debug.apk CipherAI-v2.4.apk
-          APK="CipherAI-v2.4.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk CipherAI-v2.4.1.apk
+          APK="CipherAI-v2.4.1.apk"
              
           
 
