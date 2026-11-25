@@ -238,6 +238,22 @@ public class FloatingService extends Service {
             LinearLayout.VERTICAL
         );
         panel.setPadding(14, 14, 14, 14);
+
+        int fixedPanelWidth =
+            (int) (
+                280
+                * getResources()
+                    .getDisplayMetrics()
+                    .density
+            );
+
+        LinearLayout.LayoutParams panelParams =
+            new LinearLayout.LayoutParams(
+                fixedPanelWidth,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+
+        panel.setLayoutParams(panelParams);
         panel.setVisibility(View.GONE);
         panel.setBackground(
             background(
@@ -255,7 +271,6 @@ public class FloatingService extends Service {
         stateView.setTextColor(Color.WHITE);
         stateView.setTextSize(13);
         stateView.setPadding(12, 12, 12, 12);
-        panel.addView(stateView);
         updateCaptureStatus();
 
         Button small = panelButton("小");
@@ -280,15 +295,18 @@ public class FloatingService extends Service {
 
         stop.setTextColor(Color.rgb(190, 0, 30));
 
+        panel.addView(starStart);
+        panel.addView(starPause);
+        panel.addView(starSlow);
+        panel.addView(starMedium);
+        panel.addView(starFast);
+
         panel.addView(small);
         panel.addView(medium);
         panel.addView(large);
         panel.addView(pause);
-        panel.addView(starSlow);
-        panel.addView(starMedium);
-        panel.addView(starFast);
-        panel.addView(starStart);
-        panel.addView(starPause);
+
+        panel.addView(stateView);
         panel.addView(stop);
 
         container.addView(panel);
