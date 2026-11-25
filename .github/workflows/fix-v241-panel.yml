@@ -1,0 +1,121 @@
+name: Fix CipherAI V2.4.1 Panel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix floating panel layout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "app/src/main/java/com/codeword/cipherai/FloatingService.java"
+          )
+
+          text = path.read_text(encoding="utf-8")
+
+          if "int fixedPanelWidth" not in text:
+              marker = '''        panel.setPadding(14, 14, 14, 14);
+                  panel.setVisibility(View.GONE);'''
+
+              replacement = '''        panel.setPadding(14, 14, 14, 14);
+
+                  int fixedPanelWidth =
+                      (int) (
+                          280
+                          * getResources()
+                              .getDisplayMetrics()
+                              .density
+                      );
+
+                  LinearLayout.LayoutParams panelParams =
+                      new LinearLayout.LayoutParams(
+                          fixedPanelWidth,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      );
+
+                  panel.setLayoutParams(panelParams);
+                  panel.setVisibility(View.GONE);'''
+
+              assert marker in text
+              text = text.replace(
+                  marker,
+                  replacement,
+                  1
+              )
+
+              old = '''        panel.addView(stateView);
+                  updateCaptureStatus();'''
+
+              new = '''        updateCaptureStatus();'''
+
+              assert old in text
+              text = text.replace(old, new, 1)
+
+              old = '''        panel.addView(small);
+                  panel.addView(medium);
+                  panel.addView(large);
+                  panel.addView(pause);
+                  panel.addView(starSlow);
+                  panel.addView(starMedium);
+                  panel.addView(starFast);
+                  panel.addView(starStart);
+                  panel.addView(starPause);
+                  panel.addView(stop);'''
+
+              new = '''        panel.addView(starStart);
+                  panel.addView(starPause);
+                  panel.addView(starSlow);
+                  panel.addView(starMedium);
+                  panel.addView(starFast);
+
+                  panel.addView(small);
+                  panel.addView(medium);
+                  panel.addView(large);
+                  panel.addView(pause);
+
+                  panel.addView(stateView);
+                  panel.addView(stop);'''
+
+              assert old in text
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+
+          gradle_path = Path("app/build.gradle")
+          gradle = gradle_path.read_text(encoding="utf-8")
+
+          gradle = gradle.replace(
+              "versionCode 5",
+              "versionCode 6"
+          )
+
+          gradle = gradle.replace(
+              'versionName "0.2.4"',
+              'versionName "0.2.4.1"'
+          )
+
+          gradle_path.write_text(
+              gradle,
+              encoding="utf-8"
+          )
+          PY
+
+      - name: Save V2.4.1 fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          git commit -m "Fix V2.4.1 floating panel width and button order"
+          git push
